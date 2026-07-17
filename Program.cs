@@ -1,87 +1,112 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
-using HtmlAgilityPack;
-using System.Text;
 using System.Threading.Tasks;
-using System.Net;
-
+using HtmlAgilityPack;
 
 namespace Crawler
 {
-    class Program
+    internal static class Program
     {
-        static void Main(string[] args)
+        private static async Task<int> Main(string[] args)
         {
-            crewler_s();
-        }
-
-
-        //Crawler Function
-        private static void crewler_s()
-        {
-            
-            HtmlWeb hw = new HtmlWeb();
-            //Creating new object using HtmlAgility 
-            HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
-            //Load html web file to object
-            Uri myUri = new Uri("http://www.deadlinkcity.com/");
-            string host = myUri.Host;
-            doc = hw.Load(myUri.ToString());
-            //Creat list contains all the links of the website
-            var cbl_items = new List<String>();
-            // Run on the website and choose all the href
-            foreach (HtmlNode link in doc.DocumentNode.SelectNodes("//a[@href]"))
+            if (args.Length < 1 || args.Length > 2)
             {
-                // Get the value of the HREF attribute
-                string hrefValue = link.GetAttributeValue("href", string.Empty);
-                //Condition of link structure
-                if (!hrefValue.Contains("http"))
-                {
-                    var fix = "/" + hrefValue;
-                    fix = fix.Replace("//", "/");
-
-                    if (cbl_items.Contains("http://" + host + fix))
-                        continue;
-                    cbl_items.Add("http://" + host + fix);
-                }
-                else
-                {
-                    if (cbl_items.Contains(hrefValue))
-                        continue;
-                    cbl_items.Add(hrefValue);
-                }
+                Console.Error.WriteLine("Usage: Crawler <url> [output-csv-path]");
+                Console.Error.WriteLine();
+                Console.Error.WriteLine("Fetches the given page, tests every link on it, and writes the");
+                Console.Error.WriteLine("broken ones to a CSV file (default: output.csv in the current directory).");
+                return 2;
             }
-            //Creat var for the bad links (using it in the end for the CSV)
-            var badLinks = new List<String>();
-            // Run on the list of links
-            foreach (String element in cbl_items)
-                {
-                //prints of the Test links
-                    Console.WriteLine("Testing:  " +element);
-                    HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(element);
-                   // webRequest.Timeout = 500;
-                    webRequest.AllowAutoRedirect = true;
+
+            if (!Uri.TryCreate(args[0], UriKind.Absolute, out Uri baseUri) ||
+                (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
+            {
+                Console.Error.WriteLine($"Error: '{args[0]}' is not a valid http/https URL.");
+                return 2;
+            }
+
+            string outputPath = args.Length == 2 ? args[1] : "output.csv";
+
+            using HttpClient client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; Crawler/1.0)");
+
+            // Load the page and parse its HTML.
+            HtmlDocument doc = new HtmlDocument();
+            try
+            {
+                doc.LoadHtml(await client.GetStringAsync(baseUri));
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                Console.Error.WriteLine($"Error: could not load {baseUri}: {ex.Message}");
+                return 1;
+            }
+
+            // Collect the unique absolute http(s) links on the page.
+            // Relative links are resolved against the page URL; non-web schemes
+            // (mailto:, javascript:, tel:, ...) are skipped.
+            var links = new List<string>();
+            var seen = new HashSet<string>();
+            foreach (HtmlNode anchor in doc.DocumentNode.SelectNodes("//a[@href]") ?? Enumerable.Empty<HtmlNode>())
+            {
+                string href = anchor.GetAttributeValue("href", string.Empty);
+                if (string.IsNullOrWhiteSpace(href))
+                    continue;
+                if (!Uri.TryCreate(baseUri, href, out Uri absolute))
+                    continue;
+                if (absolute.Scheme != Uri.UriSchemeHttp && absolute.Scheme != Uri.UriSchemeHttps)
+                    continue;
+
+                // Drop the #fragment so anchors on the same page are tested once.
+                string url = absolute.GetLeftPart(UriPartial.Query);
+                if (seen.Add(url))
+                    links.Add(url);
+            }
+
+            Console.WriteLine($"Found {links.Count} unique links on {baseUri}");
+
+            // Test each link; anything that fails or returns a non-success
+            // status code is recorded as broken.
+            var badLinks = new List<string>();
+            foreach (string link in links)
+            {
+                Console.Write($"Testing: {link} ... ");
                 try
                 {
-                    using (HttpWebResponse response = (HttpWebResponse)webRequest.GetResponse())
+                    using HttpResponseMessage response = await client.GetAsync(link);
+                    if (response.IsSuccessStatusCode)
                     {
-                        Console.WriteLine("Good link");
+                        Console.WriteLine("OK");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"BROKEN ({(int)response.StatusCode})");
+                        badLinks.Add(link);
                     }
                 }
-                catch
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
                 {
-                    badLinks.Add(element);
-                }   finally
-                {
-                    webRequest.Abort();
+                    Console.WriteLine("BROKEN (no response)");
+                    badLinks.Add(link);
                 }
             }
-            //Writing CSV file of Bad Links
-            string csv = String.Join("\n", badLinks.Select(x => x.ToString()).ToArray());
-            //Destination Path of CSV Exporting 
-            System.IO.File.WriteAllText(@"C:\Users\Eli\Desktop\Crawler.cs\output.csv", csv);
+
+            // Write the broken links to the CSV file, one URL per line.
+            try
+            {
+                File.WriteAllLines(outputPath, badLinks);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"Error: could not write {outputPath}: {ex.Message}");
+                return 1;
+            }
+
+            Console.WriteLine($"Done: {badLinks.Count} broken link(s) written to {outputPath}");
+            return 0;
         }
     }
 }
