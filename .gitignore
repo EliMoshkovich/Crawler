@@ -19,5 +19,5 @@ packages/
 .DS_Store
 Thumbs.db
 
-# Crawler output
+# Program output
 output.csv

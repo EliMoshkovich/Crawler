@@ -1,4 +1,4 @@
-# Crawler
+# Broken Link Checker
 
 A command-line broken-link checker written in C# on .NET 8. Point it at a web
 page and it reports every link on that page that no longer works.

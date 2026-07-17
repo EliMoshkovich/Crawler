@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Crawler", "Crawler.csproj", "{5571DEA8-7269-4475-9410-91506C855EF5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BrokenLinkChecker", "BrokenLinkChecker.csproj", "{5571DEA8-7269-4475-9410-91506C855EF5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

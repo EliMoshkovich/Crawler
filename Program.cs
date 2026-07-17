@@ -1,6 +1,6 @@
 using HtmlAgilityPack;
 
-namespace Crawler;
+namespace BrokenLinkChecker;
 
 /// <summary>
 /// Command-line broken-link checker: fetches a page, tests every link on it,
@@ -15,7 +15,7 @@ internal static class Program
     {
         if (args.Length is < 1 or > 2)
         {
-            Console.Error.WriteLine("Usage: Crawler <url> [output-csv-path]");
+            Console.Error.WriteLine("Usage: broken-link-checker <url> [output-csv-path]");
             Console.Error.WriteLine();
             Console.Error.WriteLine("Fetches the given page, tests every link on it, and writes the");
             Console.Error.WriteLine("broken ones to a CSV file (default: output.csv in the current directory).");
@@ -32,7 +32,7 @@ internal static class Program
         string outputPath = args.Length == 2 ? args[1] : "output.csv";
 
         using var client = new HttpClient { Timeout = RequestTimeout };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; Crawler/1.0)");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; broken-link-checker/1.0)");
 
         var doc = new HtmlDocument();
         try
